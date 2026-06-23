@@ -23,7 +23,7 @@ import QualityRadarChart from '../../components/charts/QualityRadarChart';
 import PageHeader from '../../components/common/PageHeader';
 
 // ── Demo fallback used when no real analysis exists ──────────────────────
-const DEMO = {
+const DEMO = { 
   trustScore: 74, trustLevel: 'Good', trustColor: '#06B6D4',
   completeness: 68, completenessLevel: 'Fair',
   descriptionQuality: 77,

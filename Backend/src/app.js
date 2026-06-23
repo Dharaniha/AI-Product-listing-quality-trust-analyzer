@@ -14,7 +14,6 @@ const app = express();
 
 app.use(helmet());
 app.use(cors({ origin: config.corsOrigin, credentials: true }));
-app.use(express.json({ limit: '1mb' }));
 app.use(globalLimiter);
 
 if (config.nodeEnv === 'development') {
@@ -25,10 +24,16 @@ app.get('/api/health', (req, res) => {
   res.json({ success: true, message: 'TrustLens API is running' });
 });
 
-app.use('/api/auth', authRoutes);
-app.use('/api/listings', listingsRoutes);
+// Apply JSON parsing only to routes that send JSON
+// Analysis route uses multer for multipart/form-data — no express.json() there
+app.use('/api/auth', express.json({ limit: '1mb' }), authRoutes);
+app.use('/api/listings', express.json({ limit: '1mb' }), listingsRoutes);
 app.use('/api/analysis', analysisRoutes);
-app.use('/api/trust-center', trustCenterRoutes);
+app.use('/api/trust-center', express.json({ limit: '1mb' }), trustCenterRoutes);
+
+app.get("/", (req, res) => {
+  res.send("TrustLens Backend Running 🚀");
+});
 
 app.use(notFound);
 app.use(errorHandler);

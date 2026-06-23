@@ -1,7 +1,11 @@
 import * as analysisService from '../services/analysis.service.js';
 
 export async function runAnalysis(req, res) {
-  const result = await analysisService.runAnalysis(req.user.email, req.body);
+  const result = await analysisService.runAnalysis(
+    req.user.email,
+    req.body,
+    req.files || []
+  );
   res.json(result);
 }
 

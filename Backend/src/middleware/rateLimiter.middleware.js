@@ -1,8 +1,9 @@
 import rateLimit from 'express-rate-limit';
+import { config } from '../config/index.js';
 
 export const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: config.nodeEnv === 'development' ? 1000 : 100,
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, message: 'Too many requests, please try again later' },

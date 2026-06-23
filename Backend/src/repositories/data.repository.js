@@ -1,105 +1,223 @@
-const users = new Map();
-const listings = new Map();
-const analyses = new Map();
+import { supabase } from '../config/supabase.js';
+import bcrypt from 'bcrypt';
 
-function getUserStore(userId) {
-  if (!listings.has(userId)) listings.set(userId, []);
-  if (!analyses.has(userId)) analyses.set(userId, []);
-  return {
-    listings: listings.get(userId),
-    analyses: analyses.get(userId),
-  };
-}
+// ================= USERS (Supabase) =================
 
 export async function findUserByEmail(email) {
-  return users.get(email.toLowerCase()) || null;
+  if (!email) return null;
+
+  const { data, error } = await supabase
+    .from('users')
+    .select('*')
+    .eq('email', email.toLowerCase())
+    .single();
+
+  if (error || !data) return null;
+  return data;
 }
 
 export async function createUser({ name, email, password }) {
   const key = email.toLowerCase();
-  const user = {
+  const password_hash = password
+    ? await bcrypt.hash(password, 10)
+    : null;
+
+  const record = {
     name,
     email: key,
-    password,
+    password_hash,
     plan: 'Pro',
-    createdAt: new Date().toISOString(),
+    created_at: new Date().toISOString(),
   };
-  users.set(key, user);
-  getUserStore(key);
-  return user;
+
+  const { data, error } = await supabase
+    .from('users')
+    .insert([record])
+    .select()
+    .single();
+
+  if (error) {
+    console.error('❌ User insert error:', error);
+    throw error;
+  }
+
+  return data;
 }
 
-export async function findOrCreateUser(email, data = {}) {
+export async function findOrCreateUser(email, extraData = {}) {
+  if (!email) throw new Error('Email is required');
   const existing = await findUserByEmail(email);
   if (existing) return existing;
-  return createUser({ name: data.name, email, password: data.password || '' });
+  return createUser({
+    name: extraData.name || 'User',
+    email,
+    password: extraData.password || '',
+  });
 }
 
-export async function saveListing(userId, listing) {
-  const store = getUserStore(userId);
-  const id = listing.id || `lst_${Date.now()}`;
-  const existing = store.listings.findIndex((l) => l.id === id);
-  const record = { ...listing, id, savedAt: new Date().toISOString() };
-  if (existing >= 0) store.listings[existing] = record;
-  else store.listings.unshift(record);
-  return record;
-}
+// ================= LISTINGS =================
 
-export async function getListings(userId) {
-  return getUserStore(userId).listings;
-}
-
-export async function getListingById(userId, id) {
-  return getUserStore(userId).listings.find((l) => l.id === id) || null;
-}
-
-export async function deleteListing(userId, id) {
-  const store = getUserStore(userId);
-  const idx = store.listings.findIndex((l) => l.id === id);
-  if (idx === -1) return false;
-  store.listings.splice(idx, 1);
-  return true;
-}
-
-export async function saveAnalysis(userId, formData, result) {
-  const store = getUserStore(userId);
-  const id = `ana_${Date.now()}`;
+export async function saveListing(userEmail, listing, imageUrls = []) {
   const record = {
-    id,
-    listingName: result.listingName || formData.productName || 'Untitled',
-    category: formData.category || '',
-    brand: formData.brand || '',
-    trustScore: result.trustScore,
-    trustLevel: result.trustLevel,
-    descriptionQuality: result.descriptionQuality,
-    completeness: result.completeness,
-    duplicateRisk: result.duplicateRisk,
-    suspiciousRisk: result.suspiciousRisk,
-    status: result.trustScore >= 90 ? 'verified'
-      : result.trustScore >= 70 ? 'warning'
-        : 'flagged',
-    formData,
-    result,
-    date: new Date().toISOString(),
+    user_id:      userEmail,
+    product_name: listing.productName,
+    category:     listing.category    || null,
+    brand:        listing.brand       || null,
+    model:        listing.model       || null,
+    condition:    listing.condition   || null,
+    age:          listing.age         || null,
+    warranty:     listing.warranty    || null,
+    description:  listing.description || null,
+    image_urls:   imageUrls.length > 0
+                    ? imageUrls
+                    : Array.isArray(listing.images)
+                      ? listing.images.map(img => img.name || img).filter(Boolean)
+                      : [],
+    created_at:   new Date().toISOString(),
+    updated_at:   new Date().toISOString(),
   };
-  store.analyses.unshift(record);
-  store.analyses.splice(50);
-  return record;
+
+  console.log('LISTING INSERT ATTEMPT:', record);
+
+  const { data, error } = await supabase
+    .from('listings')
+    .insert([record])
+    .select();
+
+  if (error) {
+    console.error('❌ Listing insert error:', error);
+    throw error;
+  }
+
+  return data[0];
 }
 
-export async function getAnalysisHistory(userId) {
-  return getUserStore(userId).analyses;
+export async function getListings(userEmail) {
+  const { data, error } = await supabase
+    .from('listings')
+    .select('*')
+    .eq('user_id', userEmail)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('❌ Fetch listings error:', error);
+    throw error;
+  }
+
+  return data;
 }
 
-export async function deleteAnalysis(userId, id) {
-  const store = getUserStore(userId);
-  const idx = store.analyses.findIndex((a) => a.id === id);
-  if (idx === -1) return false;
-  store.analyses.splice(idx, 1);
+export async function getListingById(userEmail, id) {
+  const { data, error } = await supabase
+    .from('listings')
+    .select('*')
+    .eq('id', id)
+    .eq('user_id', userEmail)
+    .single();
+
+  if (error) {
+    console.error('❌ Fetch listing by ID error:', error);
+    return null;
+  }
+
+  return data;
+}
+
+export async function deleteListing(userEmail, id) {
+  const { error } = await supabase
+    .from('listings')
+    .delete()
+    .eq('id', id)
+    .eq('user_id', userEmail);
+
+  if (error) {
+    console.error('❌ Delete listing error:', error);
+    return false;
+  }
+
   return true;
 }
 
-export async function clearAnalysisHistory(userId) {
-  analyses.set(userId, []);
+// ================= ANALYSIS =================
+
+export async function saveAnalysis(userEmail, formData, result) {
+  // Guard: block duplicate inserts within 5 seconds
+  const { data: recent } = await supabase
+    .from('analyses')
+    .select('id, created_at')
+    .eq('user_id', userEmail)
+    .eq('listing_name', result.listingName || formData.productName || 'Untitled')
+    .gte('created_at', new Date(Date.now() - 5000).toISOString())
+    .limit(1);
+
+  if (recent && recent.length > 0) {
+    console.warn('Duplicate analysis insert blocked:', recent[0].id);
+    return recent[0];
+  }
+
+  const record = {
+    user_id:      userEmail,
+    listing_name: result.listingName || formData.productName || 'Untitled',
+    trust_score:  result.trustScore,
+    trust_level:  result.trustLevel,
+    created_at:   new Date().toISOString(),
+  };
+
+  console.log('INSERT ATTEMPT:', record);
+
+  const { data, error } = await supabase
+    .from('analyses')
+    .insert([record])
+    .select();
+
+  if (error) {
+    console.error('❌ Analysis insert error:', error);
+    throw error;
+  }
+
+  return data[0];
+}
+
+export async function getAnalysisHistory(userEmail) {
+  const { data, error } = await supabase
+    .from('analyses')
+    .select('*')
+    .eq('user_id', userEmail)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('❌ Fetch analysis error:', error);
+    throw error;
+  }
+
+  return data;
+}
+
+export async function deleteAnalysis(userEmail, id) {
+  const { error } = await supabase
+    .from('analyses')
+    .delete()
+    .eq('id', id)
+    .eq('user_id', userEmail);
+
+  if (error) {
+    console.error('❌ Delete analysis error:', error);
+    return false;
+  }
+
+  return true;
+}
+
+export async function clearAnalysisHistory(userEmail) {
+  const { error } = await supabase
+    .from('analyses')
+    .delete()
+    .eq('user_id', userEmail);
+
+  if (error) {
+    console.error('❌ Clear analysis error:', error);
+    throw error;
+  }
+
   return true;
 }

@@ -1,3 +1,4 @@
+import bcrypt from 'bcrypt';
 import * as repo from '../repositories/data.repository.js';
 import { signToken } from '../middleware/auth.middleware.js';
 import { ApiError } from '../utils/apiError.js';
@@ -16,12 +17,12 @@ export async function signup({ name, email, password }) {
 }
 
 export async function login({ email, password }) {
-  let user = await repo.findUserByEmail(email);
+  const user = await repo.findUserByEmail(email);
 
-  if (!user) {
-    const name = deriveNameFromEmail(email);
-    user = await repo.createUser({ name, email, password });
-  }
+  if (!user) throw new ApiError(401, 'Invalid email or password');
+
+  const valid = await bcrypt.compare(password, user.password_hash);
+  if (!valid) throw new ApiError(401, 'Invalid email or password');
 
   const token = signToken({ email: user.email, name: user.name, plan: user.plan });
   return {

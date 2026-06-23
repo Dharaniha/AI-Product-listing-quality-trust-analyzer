@@ -57,12 +57,12 @@ export default function NewListingPage() {
     }, 1800);
   };
 
+  // ── Stores real File objects (not just { name, size }) ──
   const handleImageDrop = (e) => {
     e.preventDefault();
     setDragOver(false);
     const files = Array.from(e.dataTransfer?.files || e.target.files || []);
-    const names = files.map(f => ({ name: f.name, size: f.size }));
-    update('images', [...form.images, ...names].slice(0, 8));
+    update('images', [...form.images, ...files].slice(0, 8));
   };
 
   const removeImage = (i) => {
@@ -263,12 +263,20 @@ export default function NewListingPage() {
                   <p className="text-xs text-muted">PNG, JPG, WEBP up to 10MB each · max 8 images</p>
                   <input id="file-input" type="file" multiple accept="image/*" className="hidden" onChange={handleImageDrop} />
                 </div>
+
+                {/* ── Image previews with real thumbnails ── */}
                 {form.images.length > 0 && (
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     {form.images.map((img, i) => (
-                      <div key={i} className="relative aspect-square rounded-xl bg-white/5 border border-white/10 flex items-center justify-center group">
-                        <ImageIcon size={24} className="text-muted" />
-                        <p className="text-xs text-muted/60 mt-1 px-2 truncate absolute bottom-2 left-0 right-0 text-center">{img.name}</p>
+                      <div key={i} className="relative aspect-square rounded-xl bg-white/5 border border-white/10 overflow-hidden group">
+                        <img
+                          src={img instanceof File ? URL.createObjectURL(img) : img}
+                          alt={img.name || `image-${i}`}
+                          className="w-full h-full object-cover"
+                        />
+                        <p className="text-xs text-white/60 px-2 truncate absolute bottom-2 left-0 right-0 text-center bg-black/40 py-0.5">
+                          {img.name}
+                        </p>
                         <button
                           type="button"
                           onClick={e => { e.stopPropagation(); removeImage(i); }}
